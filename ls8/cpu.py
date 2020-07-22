@@ -23,23 +23,6 @@ class CPU:
         self.registers[7] = stack_pointer_when_empty
 
 
-
-        def get_SP(self):
-            return self.registers[7]
-
-        def inc_SP(self):
-            self.registers[7] += 1
-
-        def decr_SP(self):
-            self.registers[7] += 1
-
-        def push(self):
-            reg = decr_SP(self)
-            val = self.register[reg]
-            self.ram
-
-
-
         # Internal registers
         self.PC = 0  # Program Counter, address of currently executing instruction
         self.IR = 0  # Instruction Register, copy of currently executing instruction
@@ -55,26 +38,43 @@ class CPU:
         # E Equal: during a CMP, set to 1 if registerA is equal to registerB, zero otherwise.
 
         # Define operations
-        HLT =  0x01    # op-code x01
+        HLT =  0x01 # 0b01 0d01
 
-        LDI =  0x82  # Set the value of a register to an integer.
+        LDI =  0x82 # 0b10000010 0d130
+                    # Set the value of a register to an integer.
 
                         # Three bytes
                             # byte 0 - instruction
                             # byte 1 - register
                             # byte 2 - "immediate" a number 0 - 255
 
-        PRN =  0x47  # Prints a value.
+        PRN =  0x47 # 0b1000111 0d71 
+                    # Prints a value.
                         # Two bytes
                             # byte 0 - instruction
                             # byte 1 - value to print
 
-        MUL = 0xa2   # Multiplies contents of register A by register B, 
+        MUL = 0xa2  # #0b10100010 0d162
+                    # Multiplies contents of register A by register B, 
                     # places result in registerA
                         # Three bytes
                             # byte 0 - instruction
                             # byte 1 - registerA number
                             # byte 2 - registerB number 
+
+        POP =  0x46 # 0b01000110 0d70
+                        # Pops a value off of the stack and stores in a register.
+                        # Two bytes
+                            # byte 0 - instruction
+                            # byte 1 - number of register to hold value
+
+        PUSH = 0x45 # 0b01000101 0d69
+                        # Pushes a value in a register onto the stack.
+                        # Two bytes
+                            # byte 0 - instruction
+                            # byte 1 - number of register holding value
+
+    
 
         # Set up the branch table
         self.branchtable = {}
@@ -82,15 +82,19 @@ class CPU:
         self.branchtable[LDI] = self.LDI
         self.branchtable[PRN] = self.PRN
         self.branchtable[MUL] = self.MUL
+        self.branchtable[POP] = self.POP
+        self.branchtable[PUSH] = self.PUSH
 
     def HLT(self):
         sys.exit("Hit an HLT command")
 
     def LDI(self):
+        # print(f'LDI value: {self.ram[self.PC+2]} into register {self.ram[self.PC+1]}')
         reg = self.ram[self.PC+1] # register in which to place val
         self.registers[reg] = self.ram[self.PC+2]  # place the val
 
     def PRN(self):
+        # print(f'Print value in register {self.ram[self.PC+1]} to terminal')
         reg = self.ram[self.PC+1] # decide register to examine
         val = self.registers[reg] # get the value
         print(f'{val}')
@@ -102,6 +106,35 @@ class CPU:
         b = self.registers[registerB] # get multiplicand 2
         result = (a * b) % 256 # multiply and mod 256 to fit 8 bits
         self.registers[registerA] = result # place the result
+
+    def PUSH(self):
+        # decrement the stack pointer
+        self.registers[7] -= 1
+        # get the stack pointer to use
+        stack_pos = self.registers[7]
+        # get the register number to pull a value from
+        reg = self.ram[self.PC+1]
+        # get the value to push
+        val = self.registers[reg]
+        
+        # print(f'stack-pointer: {stack_pos} -- register # - {reg} value in that register: {self.registers[reg]}')
+        self.ram[stack_pos] = val
+        # print(f'updated value on top of stack to {self.ram[stack_pos]}')
+        # push value at address pointed to by new SP.
+        # Value is in RAM one location after instruction.
+        val  = self.ram[self.PC + 1]
+
+
+    def POP(self):
+        # print(f'POP value from stack at {self.registers[7]} into register {self.ram[self.PC+1]}')
+        # Determine register to use to store popped value.
+        # Register number is in RAM one location after instruction.
+        output_reg = self.ram[self.PC+1]
+        # print(f'output register = {output_reg}')
+        # Retrieve value from RAM and place in specified register.
+        self.registers[output_reg] = self.ram[self.registers[7]]
+        # Move Stack Pointer after pop.
+        self.registers[7] += 1
 
     def ram_read(self, MAR):
         """Accept the address to read and return the value stored there.
@@ -115,10 +148,10 @@ class CPU:
         self.ram[MDR] = val_to_write
         return True
 
-    def load(self):
-        """Load a program into memory."""
+    # def load(self):
+    #     """Load a program into memory."""
 
-        address = 0
+    #     address = 0
 
         # For now, we've just hardcoded a program:
 
@@ -193,7 +226,8 @@ class CPU:
         running = True
     
         while running:
-            # self.trace()
+            # print(f'PC = {self.PC}, Instruction = {self.ram[self.PC]:x}')
+            #  self.trace()
             command = self.ram[self.PC]
             func = self.branchtable[command]
             func()
