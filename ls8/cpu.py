@@ -1,7 +1,5 @@
 import sys
 
-
-
 def number_of_operands (command):
     return (command & 0b11000000) >> 6
 
@@ -20,12 +18,36 @@ class CPU:
         self.registers = [0] * 8
 
 
+        # Stack
+        stack_pointer_when_empty = 0xF4 
+        self.registers[7] = stack_pointer_when_empty
+
+
+
+        def get_SP(self):
+            return self.registers[7]
+
+        def inc_SP(self):
+            self.registers[7] += 1
+
+        def decr_SP(self):
+            self.registers[7] += 1
+
+        def push(self):
+            reg = decr_SP(self)
+            val = self.register[reg]
+            self.ram
+
+
+
         # Internal registers
         self.PC = 0  # Program Counter, address of currently executing instruction
         self.IR = 0  # Instruction Register, copy of currently executing instruction
         self.MAR = 0 # Memory Address Register, address we're reading or writing
         self.MDR = 0 # Memory Data Register, value to write or value just read
         self.FL = 0  # Flags
+
+
     
         # Flags
         # L Less-than: during a CMP, set to 1 if registerA is less than registerB, zero otherwise.
