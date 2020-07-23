@@ -74,7 +74,26 @@ class CPU:
                             # byte 0 - instruction
                             # byte 1 - number of register holding value
 
-    
+        CALL = 0x50 # 0b01010000
+                        # Pushes a return address onto the stack, then chasnges
+                        # PC to address of subroutine
+                        # Two bytes
+                            # byte 0 - instruction
+                            # byte 1 - address of subroutine to call
+
+        RET = 0x11 # 0b00010001
+                        # Pushes a return address onto the stack, then chasnges
+                        # PC to address of subroutine
+                        # One byte
+                            # byte 0 - instruction
+
+        ADD = 0xA0 # 0b01010000 0d160
+                        # Adds contents of two specified registers
+                        # zThree bytes
+                        # byte 0 - instruction
+                        # byte 1 - number of register for a
+                        # byte 2 - number of register for b
+                        # returns a + b 
 
         # Set up the branch table
         self.branchtable = {}
@@ -84,6 +103,9 @@ class CPU:
         self.branchtable[MUL] = self.MUL
         self.branchtable[POP] = self.POP
         self.branchtable[PUSH] = self.PUSH
+        self.branchtable[CALL] = self.CALL
+        self.branchtable[RET] = self.RET
+        self.branchtable[ADD] = self.ADD
 
     def HLT(self):
         sys.exit("Hit an HLT command")
@@ -136,6 +158,73 @@ class CPU:
         # Move Stack Pointer after pop.
         self.registers[7] += 1
 
+    def CALL(self):
+        """Calls a subroutine by storing a resume address on the stack, then
+        # changing PC to the address stored in the register specified by the 
+        next 'instruction'. """
+
+        register_with_subroutine_address = self.ram[self.PC+1]
+        # print(f'register_with_subroutine_address = {register_with_subroutine_address}')
+        subroutine_address = self.registers[register_with_subroutine_address]
+        # print(f'subroutine_address= {subroutine_address}')
+        
+        # Get address to which to return after subroutine call.
+        resume_address = self.PC+2
+        # print(f'resume_address {resume_address}')
+        # input('here')
+        # Store the resume address on the stack.
+        self.registers[7] -= 1
+        stack_pointer = self.registers[7]
+        # print(f'stack pointer = {stack_pointer}')
+        # push resume address onto stack
+        self.ram[stack_pointer] = resume_address
+        # input(f'stored on stack = {self.ram[stack_pointer]}')
+        # print(f'self.ram[stack_pointer] = {self.ram[stack_pointer]}')
+        # input()
+        
+
+        # Transfer control to the subroutine. trhe subroutine is responsible
+        # for clearing the stack down to the resume address.
+        self.PC = subroutine_address - 1  # correct for PC incrementing by run
+        
+        # print(f'instruction at {subroutine_address}: {self.ram[subroutine_address]} ')
+
+        # offset PC because it will be incremented by dispactch loop,
+        # and in this case that would be two (one for operand, one general) 
+        # too low.
+        self.PC -= 1
+    
+    
+    def RET (self):
+        """Returns from a subroutime call.  Pulls resume address off of the stack."""
+
+        # pull resume address off of stack
+        resume_address = self.ram[self.registers[7]]
+        
+        # increment stack pointer after popping
+        self.registers[7] += 1
+
+        self.PC = resume_address
+
+        # offset PC because it will be incremented by dispactch loop,
+        # and in this case that would be one too low.
+        self.PC -= 1
+
+    def ADD (self):
+        """Adds numbers held in two registers. Places result in first register."""
+
+        reg_a = self.ram[self.PC + 1]
+        # print(f'reg_a = {reg_a}')
+        reg_b = self.ram[self.PC + 2]
+
+        a = self.registers[reg_a]
+        b = self.registers[reg_b]
+
+        result = a + b
+        
+        self.registers[reg_a] = result
+    
+
     def ram_read(self, MAR):
         """Accept the address to read and return the value stored there.
          MAR contains the address that is being read or written to.
@@ -148,26 +237,6 @@ class CPU:
         self.ram[MDR] = val_to_write
         return True
 
-    # def load(self):
-    #     """Load a program into memory."""
-
-    #     address = 0
-
-        # For now, we've just hardcoded a program:
-
-        # program = [
-        #     # From print8.ls8
-        #     0b10000010, # LDI R0,8
-        #     0b00000000,
-        #     0b00001000,
-        #     0b01000111, # PRN R0
-        #     0b00000000,
-        #     0b00000001, # HLT
-        # ]
-
-        # for instruction in program:
-        #     self.ram[address] = instruction
-        #     address += 1
 
 
     def alu(self, op, reg_a, reg_b):
@@ -200,6 +269,7 @@ class CPU:
         print()
 
     def load(self, file_name):
+        program = []
         try:
             address = 0
             with open(file_name) as f:
@@ -213,6 +283,8 @@ class CPU:
                         continue
                     # convert from string, interpret as binary
                     line_data = int(line_data,2)
+                    program.append(line_data)                
+
                     self.ram_write(address, line_data)
                     address +=1
 
@@ -220,14 +292,26 @@ class CPU:
         except FileNotFoundError:
             print(f'The specified file, {file_name}, does not exist.')
 
+    # def run_one_step(self):
+    #     PC = self.PC
+    #     # self.trace()
+    #     command = self.ram[self.PC]
+    #     input(f'PC: {PC} - command: b: {command:b} - x: {command:x} - d: {command:d}')
+    #     input(f'self.branchtable[command] = {self.branchtable[command]}')
+    #     func = self.branchtable[command]
+    #     func()
+    #     self.PC += number_of_operands(command) # per exact command            
+    #     self.PC += 1 # per cycle
 
     def run(self):
         """Run the CPU."""
         running = True
     
         while running:
+            # self.run_one_step()
+            # input(f'At text line {self.PC +1}')
             # print(f'PC = {self.PC}, Instruction = {self.ram[self.PC]:x}')
-            #  self.trace()
+            # self.trace()
             command = self.ram[self.PC]
             func = self.branchtable[command]
             func()
@@ -245,12 +329,44 @@ file_name = sys.argv[1]
 
 spanky.load(file_name)
 
-def dump_ram(length=16):
+def dump_ram(length=32):
     ctr = 0
     for ctr in range(length):
         print(f'ram row {ctr}: 0x{spanky.ram[ctr]:x}')
         ctr += 1
 
+
+
 # dump_ram()
 
 spanky.run()
+
+
+################## Depracated
+
+    # def load(self):
+    #     """Load a program into memory."""
+
+    #     address = 0
+
+        # For now, we've just hardcoded a program:
+
+        # program = [
+        #     # From print8.ls8
+        #     0b10000010, # LDI R0,8
+        #     0b00000000,
+        #     0b00001000,
+        #     0b01000111, # PRN R0
+        #     0b00000000,
+        #     0b00000001, # HLT
+        # ]
+
+        # for instruction in program:
+        #     self.ram[address] = instruction
+        #     address += 1
+
+
+        # i = 1
+        # for ln in program:
+        #     print(f'Text file line number: {i} - {ln:#8b}')
+        #     i += 1
