@@ -37,7 +37,26 @@ class CPU:
         # G Greater-than: during a CMP, set to 1 if registerA is greater than registerB, zero otherwise.
         # E Equal: during a CMP, set to 1 if registerA is equal to registerB, zero otherwise.
 
-        # Define operations
+
+        ## Flags
+        # The flags register `FL` holds the current flags status. 
+        self.FL = 0
+        # These flags change based on the operands given to the `CMP` opcode.
+
+        # The register is made up of 8 bits. If a particular bit is set, that flag is "true".
+        # `FL` bits: `00000LGE`
+        # * `L` Less-than: during a `CMP`, set to 1 if registerA is less than registerB,
+        #   zero otherwise.
+        # * `G` Greater-than: during a `CMP`, set to 1 if registerA is greater than
+        #   registerB, zero otherwise.
+        # * `E` Equal: during a `CMP`, set to 1 if registerA is equal to registerB, zero
+        #   otherwise.
+
+
+        # Operation Codes
+
+        # Used to give readable names to instructions
+        # - make sure these match with self.branchtable and have actual functions defined
         HLT =  0x01 # 0b01 0d01
 
         LDI =  0x82 # 0b10000010 0d130
@@ -95,6 +114,26 @@ class CPU:
                         # byte 2 - number of register for b
                         # returns a + b 
 
+        CMP =  0xA7 # 0b10100111
+            # Compare the values in two registers.
+                # Three bytes
+                    # byte 0 - instruction
+                    # byte 1 - register a
+                    # byte 2 - register b
+
+        JMP =  0x54 # 0b01010100
+            # Jump to the address stored in the given register.
+                # Two bytes
+                    # byte 0 - instruction
+                    # byte 1 - register containing jump address
+
+        JEQ =  0x55 # 0b01010101
+        # If `equal` flag is set (true), jump to the address stored in the given register.
+            # Two bytes
+                # byte 0 - instruction
+                # byte 1 - register containing jump address
+
+
         # Set up the branch table
         self.branchtable = {}
         self.branchtable[HLT] = self.HLT
@@ -106,6 +145,9 @@ class CPU:
         self.branchtable[CALL] = self.CALL
         self.branchtable[RET] = self.RET
         self.branchtable[ADD] = self.ADD
+        self.branchtable[CMP] = self.CMP
+        self.branchtable[JMP] = self.JMP
+        self.branchtable[JEQ] = self.JEQ
 
     def HLT(self):
         sys.exit("Hit an HLT command")
@@ -223,8 +265,98 @@ class CPU:
         result = a + b
         
         self.registers[reg_a] = result
-    
 
+    def CMP(self):
+        """Compares contents ot two registers. Sets flag in FL appropriately."""
+        # TODO:
+        # refactor to set all three flags to zero, then simplify if-else structure 
+        # to return after first success
+
+        # print(f'Print value in register {self.ram[self.PC+1]} to terminal')
+        reg_a = self.ram[self.PC+1] # decide register to examine
+        # print(f'reg_a == {reg_a}')
+        reg_b = self.ram[self.PC+2] # decide register to examine
+        # print(f'reg_b == {reg_b}')
+        val_a = self.registers[reg_a]
+        # print(f'val in reg_a == {self.registers[reg_a]}')
+        val_b = self.registers[reg_b]
+        # print(f'val in reg_b == {self.registers[reg_b]}')
+        # * If they are equal, set the Equal `E` flag to 1, 
+
+        self.FL = 0b00000000
+
+
+        if val_a ==  val_b:
+            self.FL = self.FL = 0b00000001
+            # print('set equal flag to 1')
+            # print(f'FL register = {self.FL:08b}')
+            # print('-----')
+    
+        elif val_a < val_b:
+            self.FL = self.FL = 0b00000100
+            # print('set the Less-than `L` flag to 1,')
+            # print(f'FL register = {self.FL:08b}')
+            # print('-----')
+        
+        else:
+            self.FL = self.FL = 0b00000010
+            # print('set the Greater-than `G` flag to 1')
+            # print(f'FL register = {self.FL:08b}')
+            # print('-----')
+            # otherwise set it to 0.
+
+        # print('-----')
+        # print(f'FL register = {self.FL:08b}')
+        return
+
+    def JMP(self):
+        """Reset program counter to the contents of the regiseter
+        referenced by the following code line."""
+        # print('Got to JMP')
+
+        reg_a = self.ram[self.PC+1] # decide register to examine
+        # print(f'reg_a = {reg_a}')
+        jump_address = self.registers[reg_a]
+        # print(f'jump_address = {jump_address}')
+        self.PC = jump_address
+        # print(f'self.PC = {self.PC}')
+        self.PC -= 2 # compensate for run loop automatically incrementing PC by 1
+        # print(f'self.PC after adjusting = {self.PC}')
+        return
+
+    def JEQ(self):
+        """IFF EQ flag is set, jump to the address contained in the register
+        referenced by following code line."""
+
+        FL = self.FL
+        print(f'FL = {FL:3b}')
+
+        EQ_flag = FL & 0b001 # get only the EQ flag (no need to shift)
+        print(f'EQ flag = {EQ_flag}')
+        EQ_flag_set = EQ_flag == 1
+        print(f'EQ flag_set = {EQ_flag_set}')
+        if EQ_flag_set:
+            register_with_jump_address = self.ram[self.PC+1]
+            print(f'register_with_jump_address = {register_with_jump_address}')
+
+            jump_address = self.registers[register_with_jump_address]
+            print(f'jump_address = {jump_address}')
+
+            print(f'self.PC before assigning jump address= {self.PC}')
+            self.PC = jump_address
+            print(f'self.PC after assigning jump address= {self.PC}')
+            self.PC -= 2 # compensate for run loop incrementing counter
+            print(f'self.PC adjustung for run loop= {self.PC}')
+
+        else:
+            print('Did not Jump.')
+
+        return
+
+
+
+
+    
     def ram_read(self, MAR):
         """Accept the address to read and return the value stored there.
          MAR contains the address that is being read or written to.
@@ -236,8 +368,6 @@ class CPU:
         MDR contains the data that was read or the data to write"""
         self.ram[MDR] = val_to_write
         return True
-
-
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
@@ -308,14 +438,16 @@ class CPU:
         running = True
     
         while running:
+            # print(f'self.PC = {self.PC}')
             # self.run_one_step()
             # input(f'At text line {self.PC +1}')
             # print(f'PC = {self.PC}, Instruction = {self.ram[self.PC]:x}')
             # self.trace()
             command = self.ram[self.PC]
+            # print(f'command = {command:x}')
             func = self.branchtable[command]
             func()
-            self.PC += number_of_operands(command) # per exact command            
+            self.PC += number_of_operands(command) # per exact command
             self.PC += 1 # per cycle
 
 
@@ -329,13 +461,11 @@ file_name = sys.argv[1]
 
 spanky.load(file_name)
 
-def dump_ram(length=32):
+def dump_ram(length=10):
     ctr = 0
     for ctr in range(length):
         print(f'ram row {ctr}: 0x{spanky.ram[ctr]:x}')
         ctr += 1
-
-
 
 # dump_ram()
 
